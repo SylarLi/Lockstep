@@ -1,0 +1,73 @@
+客户端
+
+1. 断开状态
+2. 连接阶段：客户端间隔发送连接包，直到超过次数限制为止；
+3. 如果超过次数限制之后没有受到服务端包，重置为断开状态；
+4. 客户端确认服务端已收到连接包（确认连接包已到达服务端），置为已连接状态；
+5. 已连接状态中，如果一段时间内没有收到任何包，重置为断开状态；
+6. 已连接状态中，收到服务端发送的心跳包之后，立即回复
+
+服务端
+
+1. 等待客户端连接包(此时视客户端为断开状态，也有可能尚未创建客户端)
+2. 收到之后创建客户端，置为已连接状态；
+3. 间隔发送心跳包；
+4. 已连接状态中，如果一段时间内没有收到任何包，重置为断开状态；
+
+常规消息
+
+客户端 or 服务端
+
+1. 操作触发常规消息发送，每一个常规消息都会有一个唯一标记(发送者生成)
+2. 如果客户端确定常规消息丢失，重新发送(相同标记)
+3. 
+
+StateSync:
+Sender, Receiver, Server
+
+1									2										3										4										5	
+		Sender send state 				Server receive state and dispatch			Receiver receive state 					Receiver receive state		
+		Receiver pause					Sender send state 							Server receive state and dispatch		Server receive state and dispatch
+		Server wait						Receiver pause								Sender send state  						Sender send state
+
+StateSync
+
+客户端
+
+1. 断开状态
+2. 发送连接包(握手)
+3. 连接成功之后，发送帧包(心跳)
+4. 开始游戏之后，发送帧包(StateSync)
+
+服务端
+
+1. 等待客户端连接包(此时视客户端为断开状态，也有可能尚未创建客户端)
+2. 收到之后创建客户端，置为已连接状态；
+3. 收到帧包(心跳)之后，立即回复
+4. 收到帧包(StateSync)之后，立即广播
+
+连接包：发送者间隔发送，接收方收到之后间隔回包，发送者接收之后开始发送帧包
+帧包(心跳)和帧包(StateSync)不会同时存在，按延迟降低发送频率
+
+Deterministic LockStep
+
+服务端(30fps，假定Playout buffer长度为D帧)：
+1. 通知客户端开始
+2. 当前帧为FA
+3. FA --> FA + D 收集客户端包Enqueue to buffer
+4. 从 FA + D 开始 收集并广播，待客户端反馈后删除对应帧数的buffer中的LockStep帧包，如果某帧缺失某个客户端的LockStep帧包则不广播
+
+客户端(30fps):
+1. 客户端FA --> FA + D 收集操作发送给服务端
+   从服务端接收到的buffer合并进入当前客户端保存的buffer(FS-->FE)(FE - D表示客户端当前应当模拟的最新帧序号)
+   截掉buffer中[FS, FC - D)范围内的
+2. 从FC = FA + D开始判定:
+如果FC - D在buffer中不存在 暂停
+如果FE - FS <= D 	FC - D == FS ? 正常 : 暂停
+如果FE - FS > D 	FC - D == FS ? 加速 : 暂停
+			FS	FE - D 	 		FE
+		   加速
+
+服务端 Send Message Start 客户端1,2
+客户端1,2开始
+
